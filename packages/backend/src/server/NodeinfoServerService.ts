@@ -6,6 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
+import type { MiMeta } from '@/models/Meta.js';
 import { MetaService } from '@/core/MetaService.js';
 import { MAX_NOTE_TEXT_LENGTH } from '@/const.js';
 import { MemorySingleCache } from '@/misc/cache.js';
@@ -25,6 +26,9 @@ export class NodeinfoServerService {
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
+
+		@Inject(DI.meta)
+		private meta: MiMeta,
 
 		private systemAccountService: SystemAccountService,
 		private metaService: MetaService,
@@ -135,6 +139,11 @@ export class NodeinfoServerService {
 		const cache = new MemorySingleCache<Awaited<ReturnType<typeof nodeinfo2>>>(1000 * 60 * 10); // 10m
 
 		fastify.get(nodeinfo2_1path, async (request, reply) => {
+			if (this.meta.federation === 'none') {
+				reply.code(403);
+				return;
+			}
+
 			const base = await cache.fetch(() => nodeinfo2(21));
 
 			reply
@@ -150,6 +159,11 @@ export class NodeinfoServerService {
 		});
 
 		fastify.get(nodeinfo2_0path, async (request, reply) => {
+			if (this.meta.federation === 'none') {
+				reply.code(403);
+				return;
+			}
+
 			const base = await cache.fetch(() => nodeinfo2(20));
 
 			delete (base as any).software.repository;
