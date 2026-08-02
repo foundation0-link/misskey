@@ -4,7 +4,7 @@
 -
 
 ### Client
--
+- Enhance: 未ログイン時のトップページ (classic) からタイムラインのサンプル表示を削除
 
 ### Server
 - Fix: 連合が無効 (`federation` が `none`) の場合に nodeinfo が応答し、サーバー情報が外部へ公開されていた問題を修正
