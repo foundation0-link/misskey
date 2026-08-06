@@ -29,8 +29,9 @@ const choiceCommandsProcessor: Processor = {
 	name: 'choiceCommands',
 	processor(body: string, ctx: NoteCommandContext): string {
 		// 完全ランダムチョイスコマンド(重複許可)(例: /choicex1 A B C または /ccx1 A B C)を処理(複数行対応)
-		body = body.replace(/^\/(choicex|ccx)(\d+)\s+(.+)$/gm, (match, _, count, line) => {
+		body = body.replace(/^\/(choicex|ccx)(\d*)\s+(.+)$/gm, (match, _, count, line) => {
 			if (ctx.remainingBudget <= 0) return match;
+			if (count === '') count = '1';
 			const choiceCount = parseInt(count, 10);
 			const choices = splitChoices(line);
 
@@ -52,8 +53,9 @@ const choiceCommandsProcessor: Processor = {
 		});
 
 		// ユニークランダムチョイスコマンド(例: /choice1 A B C または /cc1 A B C)を処理(複数行対応)
-		body = body.replace(/^\/(choice|cc)(\d+)\s+(.+)$/gm, (match, _, count, line) => {
+		body = body.replace(/^\/(choice|cc)(\d*)\s+(.+)$/gm, (match, _, count, line) => {
 			if (ctx.remainingBudget <= 0) return match;
+			if (count === '') count = '1';
 			const choiceCount = parseInt(count, 10);
 			const choices = splitChoices(line);
 
