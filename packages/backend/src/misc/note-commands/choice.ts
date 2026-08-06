@@ -6,7 +6,7 @@
 import { pickIndex } from './random.js';
 import type { NoteCommandContext, Processor } from './types.js';
 
-const SUCCESS_COLOR = 'fff5a0';
+const SUCCESS_COLOR = 'ff0000';
 const ERROR_COLOR = 'ffb3b3';
 const MAX_PICK_COUNT = 100;
 

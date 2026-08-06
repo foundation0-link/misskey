@@ -20,8 +20,8 @@ describe('applyNoteCommands', () => {
 		const result = applyNoteCommands('/dice1d6\n/choice1 A B C');
 		assert.ok(result);
 		const lines = result!.split('\n');
-		assert.match(lines[0], /^\/dice1d6 = \(\$\[bg\.color=fff5a0 \d+\]\)$/);
-		assert.match(lines[1], /^\/choice1 A B C = \(\$\[bg\.color=fff5a0 [ABC]\]\)$/);
+		assert.match(lines[0], /^\/dice1d6 = \(\$\[bg\.color=ff0000 \d+\]\)$/);
+		assert.match(lines[1], /^\/choice1 A B C = \(\$\[bg\.color=ff0000 [ABC]\]\)$/);
 	});
 
 	test('1ノート内に31件以上のコマンドがある場合、31件目以降は未展開のまま残る', () => {
@@ -31,7 +31,7 @@ describe('applyNoteCommands', () => {
 		const resultLines = result!.split('\n');
 		assert.strictEqual(resultLines.length, 31);
 		for (let i = 0; i < 30; i++) {
-			assert.match(resultLines[i], /^\/dice1d6 = \(\$\[bg\.color=fff5a0 \d+\]\)$/, `line ${i} should be expanded`);
+			assert.match(resultLines[i], /^\/dice1d6 = \(\$\[bg\.color=ff0000 \d+\]\)$/, `line ${i} should be expanded`);
 		}
 		assert.strictEqual(resultLines[30], '/dice1d6', 'line 30 should remain unexpanded');
 	});
@@ -52,7 +52,7 @@ describe('applyNoteCommands', () => {
 
 		// dice系の前方15件(budget残り分)は展開される
 		for (let i = 0; i < 15; i++) {
-			assert.match(resultLines[i], /^\/dice1d6 = \(\$\[bg\.color=fff5a0 \d+\]\)$/, `dice line ${i} should be expanded`);
+			assert.match(resultLines[i], /^\/dice1d6 = \(\$\[bg\.color=ff0000 \d+\]\)$/, `dice line ${i} should be expanded`);
 		}
 		// dice系の後方5件(16〜20件目)はbudget枯渇後のため未展開のまま残る
 		for (let i = 15; i < 20; i++) {
@@ -60,7 +60,7 @@ describe('applyNoteCommands', () => {
 		}
 		// choice系15件はchoiceCommandsProcessorが先に処理するため全件展開される
 		for (let i = 20; i < 35; i++) {
-			assert.match(resultLines[i], /^\/choice1 A B C = \(\$\[bg\.color=fff5a0 [ABC]\]\)$/, `choice line ${i} should be expanded`);
+			assert.match(resultLines[i], /^\/choice1 A B C = \(\$\[bg\.color=ff0000 [ABC]\]\)$/, `choice line ${i} should be expanded`);
 		}
 	});
 
