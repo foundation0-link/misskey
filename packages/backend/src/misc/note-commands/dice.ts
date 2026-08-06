@@ -59,8 +59,50 @@ const diceCommandsProcessor: Processor = {
 			return `${match} = ${success(String(total))}`;
 		});
 
+		// ダイスコマンド短縮形(例: /2d6)を処理(複数行対応)
+		body = body.replace(/^\/(\d+)d(\d+)/gm, (match, count, sides) => {
+			if (ctx.remainingBudget <= 0) return match;
+			const rollCount = parseInt(count, 10);
+			const diceSize = parseInt(sides, 10);
+
+			const validationError = validate(rollCount, diceSize);
+			if (validationError) {
+				ctx.remainingBudget--;
+				return `${match} = ${validationError}`;
+			}
+
+			const rolls: number[] = [];
+			for (let i = 0; i < rollCount; i++) {
+				rolls.push(rollDie(diceSize));
+			}
+			const total = rolls.reduce((a, b) => a + b, 0);
+			ctx.remainingBudget--;
+			return `${match} = ${success(String(total))}`;
+		});
+
 		// バラバラダイスコマンド(例: /dice3b6)を処理(複数行対応)
 		body = body.replace(/^\/dice(\d+)b(\d+)/gm, (match, count, sides) => {
+			if (ctx.remainingBudget <= 0) return match;
+			const rollCount = parseInt(count, 10);
+			const diceSize = parseInt(sides, 10);
+
+			const validationError = validate(rollCount, diceSize);
+			if (validationError) {
+				ctx.remainingBudget--;
+				return `${match} = ${validationError}`;
+			}
+
+			const rolls: number[] = [];
+			for (let i = 0; i < rollCount; i++) {
+				rolls.push(rollDie(diceSize));
+			}
+			const total = rolls.reduce((a, b) => a + b, 0);
+			ctx.remainingBudget--;
+			return `${match} = ${success(`${rolls.join(', ')} (${total})`)}`;
+		});
+
+		// バラバラダイスコマンド短縮形(例: /3b6)を処理(複数行対応)
+		body = body.replace(/^\/(\d+)b(\d+)/gm, (match, count, sides) => {
 			if (ctx.remainingBudget <= 0) return match;
 			const rollCount = parseInt(count, 10);
 			const diceSize = parseInt(sides, 10);
