@@ -309,24 +309,26 @@ export function useNote(
 		});
 	}
 
-	function undoReact(): void {
-		const oldReaction = $appearNote.myReaction;
-		if (!oldReaction) return;
+	function undoReact(reaction?: string): void {
+		const targetReaction = reaction ?? $appearNote.myReactions[0];
+		if (!targetReaction) return;
 		if (props.mock) return;
-		misskeyApi('notes/reactions/delete', { noteId: appearNote.id }).then(() => {
-			noteEvents.emit(`unreacted:${appearNote.id}`, { userId: $i!.id, reaction: oldReaction });
+		misskeyApi('notes/reactions/delete', { noteId: appearNote.id, reaction: targetReaction }).then(() => {
+			noteEvents.emit(`unreacted:${appearNote.id}`, { userId: $i!.id, reaction: targetReaction });
 		});
 	}
 
 	function toggleReact(customMockCallback?: (reaction: string) => void) {
-		if ($appearNote.myReaction == null) {
-			react(customMockCallback);
-		} else {
+		// 複数リアクションを付けられるため、すでにリアクション済みでもピッカーを開いて追加できるようにする。
+		// ただし likeOnly のノートは1種類しか付けられないので従来どおり取り消しに倒す。
+		if ($appearNote.myReactions.length > 0 && appearNote.reactionAcceptance === 'likeOnly') {
 			if (props.mock && customMockCallback) {
-				customMockCallback($appearNote.myReaction);
+				customMockCallback($appearNote.myReactions[0]);
 			} else {
 				undoReact();
 			}
+		} else {
+			react(customMockCallback);
 		}
 	}
 

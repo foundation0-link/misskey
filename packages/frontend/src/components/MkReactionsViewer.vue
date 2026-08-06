@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:count="count"
 		:isInitial="initialReactions.has(reaction)"
 		:noteId="props.noteId"
-		:myReaction="props.myReaction"
+		:myReactions="props.myReactions"
 		@reactionToggled="onMockToggleReaction"
 	/>
 	<slot v-if="hasMoreReactions" name="more"></slot>
@@ -43,10 +43,11 @@ const props = withDefaults(defineProps<{
 	noteId: Misskey.entities.Note['id'];
 	reactions: Misskey.entities.Note['reactions'];
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
-	myReaction: Misskey.entities.Note['myReaction'];
+	myReactions: Misskey.entities.Note['myReactions'];
 	maxNumber?: number;
 }>(), {
 	maxNumber: Infinity,
+	myReactions: () => [],
 });
 
 const mock = inject(DI.mock, false);
@@ -60,8 +61,10 @@ const initialReactions = new Set(Object.keys(props.reactions));
 const _reactions = ref<[string, number][]>([]);
 const hasMoreReactions = ref(false);
 
-if (props.myReaction != null && !(props.myReaction in props.reactions)) {
-	_reactions.value.push([props.myReaction, props.reactions[props.myReaction]]);
+for (const myReaction of props.myReactions ?? []) {
+	if (!(myReaction in props.reactions)) {
+		_reactions.value.push([myReaction, props.reactions[myReaction]]);
+	}
 }
 
 function onMockToggleReaction(emoji: string, count: number) {
@@ -79,7 +82,7 @@ function canReact(reaction: string) {
 	return !reaction.match(/@\w/) && (customEmojisMap.has(reaction) || isSupportedEmoji(reaction));
 }
 
-watch([() => props.reactions, () => props.maxNumber], ([newSource, maxNumber]) => {
+watch([() => props.reactions, () => props.maxNumber, () => props.myReactions], ([newSource, maxNumber]) => {
 	let newReactions: [string, number][] = [];
 	hasMoreReactions.value = Object.keys(newSource).length > maxNumber;
 
@@ -109,8 +112,11 @@ watch([() => props.reactions, () => props.maxNumber], ([newSource, maxNumber]) =
 
 	newReactions = newReactions.slice(0, props.maxNumber);
 
-	if (props.myReaction && !newReactions.map(([x]) => x).includes(props.myReaction)) {
-		newReactions.push([props.myReaction, newSource[props.myReaction]]);
+	// 自分が付けたリアクションは maxNumber で切り捨てられても必ず表示する
+	for (const myReaction of props.myReactions ?? []) {
+		if (!newReactions.map(([x]) => x).includes(myReaction)) {
+			newReactions.push([myReaction, newSource[myReaction]]);
+		}
 	}
 
 	_reactions.value = newReactions;

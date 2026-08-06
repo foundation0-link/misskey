@@ -29,7 +29,7 @@ import { FeaturedService } from '@/core/FeaturedService.js';
 import { trackPromise } from '@/misc/promise-tracker.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import { ReactionsBufferingService } from '@/core/ReactionsBufferingService.js';
-import { PER_NOTE_REACTION_USER_PAIR_CACHE_MAX } from '@/const.js';
+import { PER_NOTE_REACTION_USER_PAIR_CACHE_MAX, PER_USER_PER_NOTE_REACTIONS_MAX } from '@/const.js';
 
 const FALLBACK = '\u2764';
 
@@ -171,26 +171,38 @@ export class ReactionService {
 			reaction,
 		};
 
+		// 1ユーザーが1つのノートに付けられるリアクション数の上限チェック
+		const existingCount = await this.noteReactionsRepository.countBy({
+			noteId: note.id,
+			userId: user.id,
+		});
+
+		if (existingCount >= PER_USER_PER_NOTE_REACTIONS_MAX) {
+			throw new IdentifiableError('0b4f0559-b484-4e31-9f1b-1d1ba1d5c4d9', 'You cannot add any more reactions to this note.');
+		}
+
 		try {
 			await this.noteReactionsRepository.insert(record);
 		} catch (e) {
 			if (isDuplicateKeyValueError(e)) {
-				const exists = await this.noteReactionsRepository.findOneByOrFail({
-					noteId: note.id,
-					userId: user.id,
-				});
-
-				if (exists.reaction !== reaction) {
-					// 別のリアクションがすでにされていたら置き換える
-					await this.delete(user, note);
-					await this.noteReactionsRepository.insert(record);
-				} else {
-					// 同じリアクションがすでにされていたらエラー
-					throw new IdentifiableError('51c42bb4-931a-456b-bff7-e5a8a70dd298');
-				}
+				// 同じリアクションがすでにされていたらエラー
+				// (異なるリアクションは併存できるため、ここに来るのは同一リアクションの重複のみ)
+				throw new IdentifiableError('51c42bb4-931a-456b-bff7-e5a8a70dd298');
 			} else {
 				throw e;
 			}
+		}
+
+		// 上限チェックとinsertの間に別のリクエストが挿入していると上限を超えうるため、挿入後に再確認する。
+		// (上限は件数制約でありDBの一意インデックスでは担保できない)
+		const countAfterInsert = await this.noteReactionsRepository.countBy({
+			noteId: note.id,
+			userId: user.id,
+		});
+
+		if (countAfterInsert > PER_USER_PER_NOTE_REACTIONS_MAX) {
+			await this.noteReactionsRepository.delete(record.id);
+			throw new IdentifiableError('0b4f0559-b484-4e31-9f1b-1d1ba1d5c4d9', 'You cannot add any more reactions to this note.');
 		}
 
 		// Increment reactions count
@@ -263,7 +275,9 @@ export class ReactionService {
 		}
 
 		//#region 配信
-		if (this.userEntityService.isLocalUser(user) && !note.localOnly) {
+		// リモートは1ユーザー1リアクションを前提に実装されているため、2件目以降は配信しない。
+		// (複数リアクションはローカル限定の機能)
+		if (this.userEntityService.isLocalUser(user) && !note.localOnly && existingCount === 0) {
 			const content = this.apRendererService.addContext(await this.apRendererService.renderLike(record, note));
 			const dm = this.apDeliverManagerService.createDeliverManager(user, content);
 			if (note.userHost !== null) {
@@ -286,16 +300,28 @@ export class ReactionService {
 	}
 
 	@bindThis
-	public async delete(user: { id: MiUser['id']; host: MiUser['host']; isBot: MiUser['isBot']; }, note: MiNote) {
-		// if already unreacted
+	public async delete(user: { id: MiUser['id']; host: MiUser['host']; isBot: MiUser['isBot']; }, note: MiNote, _reaction?: string | null) {
+		// リアクションを指定された場合はそれだけを、指定されない場合は任意の1件を削除する
+		// (指定なしは「リアクションを取り消す」という従来の呼び出し互換のため)
 		const exist = await this.noteReactionsRepository.findOneBy({
 			noteId: note.id,
 			userId: user.id,
+			...(_reaction != null ? { reaction: this.toDbReaction(_reaction) } : {}),
 		});
 
 		if (exist == null) {
 			throw new IdentifiableError('60527ec9-b4cb-4a88-a6bd-32d3ad26817d', 'not reacted');
 		}
+
+		// 配信済みなのは最初に付けたリアクション (create時に existingCount === 0 だったもの) だけなので、
+		// それ以外を取り消したときに Undo(Like) を送るとリモート側のリアクションが消えてしまう。
+		// id は時系列順に採番されるため、最小の id が最初のリアクション。
+		const oldest = await this.noteReactionsRepository.createQueryBuilder('reaction')
+			.where('reaction.noteId = :noteId', { noteId: note.id })
+			.andWhere('reaction.userId = :userId', { userId: user.id })
+			.orderBy('reaction.id', 'ASC')
+			.getOne();
+		const isFederatedReaction = oldest != null && oldest.id === exist.id;
 
 		// Delete reaction
 		const result = await this.noteReactionsRepository.delete(exist.id);
@@ -324,7 +350,7 @@ export class ReactionService {
 		});
 
 		//#region 配信
-		if (this.userEntityService.isLocalUser(user) && !note.localOnly) {
+		if (this.userEntityService.isLocalUser(user) && !note.localOnly && isFederatedReaction) {
 			const content = this.apRendererService.addContext(this.apRendererService.renderUndo(await this.apRendererService.renderLike(exist, note), user));
 			const dm = this.apDeliverManagerService.createDeliverManager(user, content);
 			if (note.userHost !== null) {
@@ -377,6 +403,20 @@ export class ReactionService {
 
 				return acc;
 			}, {});
+	}
+
+	/**
+	 * クライアントに渡す形式のリアクションを、DBに保存されている形式に戻す。
+	 *
+	 * ローカルのカスタム絵文字は `:name:` として保存されるが、`decodeReaction()` を経て
+	 * クライアントには `:name@.:` として渡される。削除対象を特定する際はこの差を吸収する必要がある。
+	 */
+	@bindThis
+	public toDbReaction(reaction: string): string {
+		const decoded = this.decodeReaction(reaction);
+		if (decoded.name == null) return reaction;
+		// host が null または '.' はローカルのカスタム絵文字を表し、DB上は host なしで保存されている
+		return (decoded.host == null || decoded.host === '.') ? `:${decoded.name}:` : `:${decoded.name}@${decoded.host}:`;
 	}
 
 	@bindThis

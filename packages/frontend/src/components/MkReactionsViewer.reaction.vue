@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="buttonEl"
 	v-ripple="canToggle"
 	class="_button"
-	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:class="[$style.root, { [$style.reacted]: reacted, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -45,7 +45,7 @@ const props = defineProps<{
 	noteId: Misskey.entities.Note['id'];
 	reaction: string;
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
-	myReaction: Misskey.entities.Note['myReaction'];
+	myReactions: Misskey.entities.Note['myReactions'];
 	count: number;
 	isInitial: boolean;
 }>();
@@ -59,6 +59,8 @@ const emit = defineEmits<{
 const buttonEl = useTemplateRef('buttonEl');
 
 const emojiName = computed(() => props.reaction.replace(/:/g, '').replace(/@\./, ''));
+
+const reacted = computed(() => props.myReactions?.includes(props.reaction) ?? false);
 
 const canToggle = computed(() => {
 	const emoji = customEmojisMap.get(emojiName.value) ?? getUnicodeEmojiOrNull(props.reaction);
@@ -76,18 +78,13 @@ async function toggleReaction() {
 
 	const me = $i;
 
-	const oldReaction = props.myReaction;
-	if (oldReaction) {
+	// 複数リアクションを付けられるため、各ボタンは自分自身のリアクションのみを付け外しする
+	if (reacted.value) {
 		const confirm = await os.confirm({
 			type: 'warning',
-			text: oldReaction !== props.reaction ? i18n.ts.changeReactionConfirm : i18n.ts.cancelReactionConfirm,
+			text: i18n.ts.cancelReactionConfirm,
 		});
 		if (confirm.canceled) return;
-
-		if (oldReaction !== props.reaction) {
-			sound.playMisskeySfx('reaction');
-			haptic();
-		}
 
 		if (mock) {
 			emit('reactionToggled', props.reaction, (props.count - 1));
@@ -96,27 +93,12 @@ async function toggleReaction() {
 
 		misskeyApi('notes/reactions/delete', {
 			noteId: props.noteId,
+			reaction: props.reaction,
 		}).then(() => {
 			noteEvents.emit(`unreacted:${props.noteId}`, {
 				userId: me.id,
-				reaction: oldReaction,
+				reaction: props.reaction,
 			});
-			if (oldReaction !== props.reaction) {
-				misskeyApi('notes/reactions/create', {
-					noteId: props.noteId,
-					reaction: props.reaction,
-				}).then(() => {
-					const emoji = customEmojisMap.get(emojiName.value);
-					if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) {
-						return;
-					}
-					noteEvents.emit(`reacted:${props.noteId}`, {
-						userId: me.id,
-						reaction: props.reaction,
-						emoji: emoji,
-					});
-				});
-			}
 		});
 	} else {
 		if (prefer.s.confirmOnReact) {

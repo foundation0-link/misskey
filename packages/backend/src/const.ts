@@ -10,6 +10,11 @@ export const USER_ACTIVE_THRESHOLD = 1000 * 60 * 60 * 24 * 3; // 3days
 
 export const PER_NOTE_REACTION_USER_PAIR_CACHE_MAX = 16;
 
+/**
+ * 1ユーザーが1つのノートに対して付けられるリアクションの最大数
+ */
+export const PER_USER_PER_NOTE_REACTIONS_MAX = 16;
+
 //#region hard limits
 // If you change DB_* values, you must also change the DB schema.
 
