@@ -34,6 +34,9 @@ const choiceCommandsProcessor: Processor = {
 			const choiceCount = parseInt(count, 10);
 			const choices = splitChoices(line);
 
+			// choiceCount の上限チェックは Array.from({ length: choiceCount }) より必ず先に評価すること。
+			// 順序を入れ替えると、choiceCount が極端に大きい値(桁あふれで Infinity 化した場合等)のときに
+			// RangeError でノート投稿全体がクラッシュする。
 			if (choiceCount <= 0 || choiceCount > MAX_PICK_COUNT || choices.length === 0) {
 				ctx.remainingBudget--;
 				return `${match} = ${error('不正な指定です')}`;
