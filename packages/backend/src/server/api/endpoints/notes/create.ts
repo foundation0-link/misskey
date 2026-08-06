@@ -11,6 +11,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { NoteCreateService } from '@/core/NoteCreateService.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { applyNoteCommands } from '@/misc/note-commands/index.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -229,7 +230,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						multiple: ps.poll.multiple ?? false,
 						expiresAt: ps.poll.expiredAfter ? new Date(Date.now() + ps.poll.expiredAfter) : ps.poll.expiresAt ? new Date(ps.poll.expiresAt) : null,
 					} : null,
-					text: ps.text ?? null,
+					text: applyNoteCommands(ps.text ?? null),
 					replyId: ps.replyId ?? null,
 					renoteId: ps.renoteId ?? null,
 					cw: ps.cw ?? null,

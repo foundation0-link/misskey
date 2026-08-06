@@ -43,6 +43,16 @@ describe('Note', () => {
 		assert.strictEqual(res.body.createdNote.text, post.text);
 	});
 
+	test('ダイスコマンドが展開されて投稿される', async () => {
+		const note = await post(alice, { text: '/dice1d6' });
+		assert.match(note.text ?? '', /^\/dice1d6 = \(\$\[bg\.color=fff5a0 \d+\]\)$/);
+	});
+
+	test('ダイスコマンドを含まないテキストは変化しない', async () => {
+		const note = await post(alice, { text: 'ただの投稿です' });
+		assert.strictEqual(note.text, 'ただの投稿です');
+	});
+
 	test('ファイルを添付できる', async () => {
 		const file = await uploadUrl(alice, 'https://raw.githubusercontent.com/misskey-dev/misskey/develop/packages/backend/test/resources/192.jpg');
 
